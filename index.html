@@ -317,10 +317,10 @@ const mixTable = mix => {
 let lastShapeClick = 0;
 const map = L.map("map", {zoomControl:false, preferCanvas:true, minZoom:8}).setView([25.13, 55.24], 10);
 L.control.zoom({position:"bottomright"}).addTo(map);
-L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png", {
+L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.pngkey=cb1_3s4h_1_7d84f956f7bcca5dd4f596ca", {
   attribution:'Imagery scores, OD flows &amp; stays: user data \u00b7 Community polygons: Dubai Statistics \u00b7 &copy; OpenStreetMap, &copy; CARTO',
   maxZoom:19, subdomains:"abcd"}).addTo(map);
-L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png",
+L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png?key=cb1_3s4h_1_7d84f956f7bcca5dd4f596ca",
   {maxZoom:19, subdomains:"abcd", opacity:.5, pane:"shadowPane"}).addTo(map);
 
 const PANES = {comm:410, images:420, straight:430, od:440, routes:450, stays:460, zones:470};
