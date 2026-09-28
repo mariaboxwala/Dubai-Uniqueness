@@ -1,0 +1,27 @@
+{
+ "datasets": [
+  {
+   "id": "m1",
+   "label": "Motiongate 1",
+   "file": "results/m1/map.json",
+   "n_routes_drawn": 655,
+   "n_trips_scored": 9090,
+   "n_stays": 16560,
+   "n_devices": 2228,
+   "date_from": "2025-05-06",
+   "date_to": "2025-05-10"
+  },
+  {
+   "id": "gewan_hotel",
+   "label": "Gewan Hotel",
+   "file": "results/gewan_hotel/map.json",
+   "n_routes_drawn": 2,
+   "n_trips_scored": 56,
+   "n_stays": 70,
+   "n_devices": 6,
+   "date_from": "2025-05-02",
+   "date_to": "2025-05-15"
+  }
+ ],
+ "shared": "results/shared/city.json"
+}
