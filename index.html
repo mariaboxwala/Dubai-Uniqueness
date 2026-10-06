@@ -161,7 +161,11 @@ h2{font-size:11.5px;font-weight:600;color:var(--muted);margin:0 0 10px}
 
 .leaflet-tooltip.tt{background:rgba(31,31,31,.97);border:1px solid var(--rule);color:var(--ink);
   box-shadow:0 1px 6px rgba(0,0,0,.45);font-size:11.5px;padding:8px 10px;border-radius:6px;
-  font-family:"Instrument Sans",sans-serif;line-height:1.45;max-width:250px}
+  font-family:"Instrument Sans",sans-serif;line-height:1.45;
+  max-width:300px;white-space:normal;word-break:normal;overflow-wrap:anywhere}
+.leaflet-tooltip.tt table{width:100%;table-layout:auto}
+.leaflet-tooltip.tt th{white-space:nowrap;vertical-align:top}
+.leaflet-tooltip.tt td{white-space:normal;text-align:right;padding-left:8px}
 .leaflet-tooltip.tt::before{display:none}
 .tt b{font-weight:600}
 .tt table{border-collapse:collapse;margin-top:4px}
@@ -179,6 +183,8 @@ h2{font-size:11.5px;font-weight:600;color:var(--muted);margin:0 0 10px}
 
 @media (max-width:900px){
   #app{grid-template-columns:1fr;grid-template-rows:56vh auto;height:auto}
+  #app.collapsed{grid-template-columns:1fr;grid-template-rows:92vh 0}
+  #app.collapsed #panel{display:none}
   #panel{order:2;border-right:0;border-top:1px solid var(--rule);overflow:visible}
   #mapwrap{order:1;height:56vh}
   #core{left:14px;right:14px;bottom:auto;top:60px}
@@ -188,6 +194,18 @@ h2{font-size:11.5px;font-weight:600;color:var(--muted);margin:0 0 10px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
 /* ---- added for the multi-collection build ---- */
+/* collapsible panel */
+#app{transition:grid-template-columns .22s ease}
+#app.collapsed{grid-template-columns:0 1fr}
+#app.collapsed #panel{opacity:0;pointer-events:none}
+#panel{transition:opacity .15s ease}
+#collapse{position:absolute;top:14px;left:14px;z-index:700;width:28px;height:28px;padding:0;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  background:rgba(31,31,31,.95);border:1px solid var(--rule);border-radius:6px;color:var(--ink);
+  font:inherit;font-size:14px;line-height:1;box-shadow:0 1px 6px rgba(0,0,0,.45)}
+#collapse:hover{background:var(--raise)}
+#collapse:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){#app,#panel{transition:none}}
 #tabs{overflow-x:auto;scrollbar-width:none}
 #tabs::-webkit-scrollbar{display:none}
 #tabs button{flex:0 0 auto;padding:11px 12px;white-space:nowrap}
@@ -340,6 +358,8 @@ select.pick:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
   <div id="mapwrap">
     <div id="map"></div>
+    <button id="collapse" title="Hide the panel (\\)" aria-label="Hide the panel"
+      aria-expanded="true">‹</button>
     <div class="card" id="layerctl"><h3>Layers</h3><div id="layerbox"></div></div>
     <div class="card" id="core">
       <div class="chead"><b id="ctitle"></b><span id="csub"></span></div>
@@ -358,6 +378,8 @@ select.pick:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
       <div class="lkey"><q></q><span>corridor, width &prop; log trips</span></div>
       <div class="lkey"><o></o><span>stay, size &prop; duration</span></div>
       <div class="lkey"><u></u><span>stay zone, size &prop; hours</span></div>
+      <div class="lkey"><span style="color:var(--faint)">Stays, stay zones and POIs group into
+        discs where they crowd; zoom in to separate them.</span></div>
       <h3 style="margin:11px 0 6px">POIs — modernity within audience</h3>
       <div style="font-size:10px;color:var(--muted)">Tourist-facing</div>
       <div class="ramp2" id="ramp-t"></div>
@@ -448,7 +470,7 @@ function initMap(){
   L.control.zoom({position:"bottomright"}).addTo(MAP);
   /* CARTO watermarks keyless tiles since Aug 2026. Paste a free key from
      carto.com/basemaps/apikey and list the hosts it is restricted to. */
-  const CARTO_KEY = "cb1_3s4h_1_7d84f956f7bcca5dd4f596ca";
+  const CARTO_KEY = "";
   const CARTO_HOSTS = [];
   const useCarto = CARTO_KEY && CARTO_HOSTS.includes(location.hostname);
   const DATA_ATTR = 'Imagery scores, OD flows &amp; stays: user data \u00b7 Community polygons: Dubai Statistics';
@@ -516,7 +538,7 @@ function initShared(){
       <tr><th>visitor tilt</th><td>${c.aud > 0 ? "+" : ""}${c.aud} vs city</td></tr>` : ""}</table>
       <em>${c.quad.toLowerCase()}</em>`;
     c.rings.forEach(r => {
-      const base = {pane:"comm", color:"#111", weight:.6, opacity:.55};
+      const base = {pane:"comm", color:"#111", weight:.6, opacity:.55, bubblingMouseEvents:false};
       L.polygon(r, Object.assign({}, base, {fillColor:cOf(c.mod), fillOpacity:.45}))
         .bindTooltip(tip, {className:"tt", sticky:true}).addTo(commMod);
       L.polygon(r, Object.assign({}, base, {fillColor:cOf(c.pos), fillOpacity:.45}))
@@ -541,8 +563,45 @@ function initShared(){
 }
 
 /* ------------------------------------------- dataset-dependent map layers */
-const routeLayer = L.layerGroup(), stayLayer = L.layerGroup(),
-      zoneLayer = L.layerGroup(), odLayer = L.layerGroup();
+const routeLayer = L.layerGroup(), odLayer = L.layerGroup();
+
+/* Stays and stay zones are far too dense to draw raw, so they use the same
+   clustering as the POIs: a disc coloured by the mean of what it holds. */
+function valueCluster(opts){
+  if (typeof L.markerClusterGroup !== "function") return L.layerGroup();
+  const g = L.markerClusterGroup({
+    maxClusterRadius: z => z <= 9 ? 56 : z <= 11 ? 38 : z <= 13 ? 24 : 12,
+    disableClusteringAtZoom:15, spiderfyOnMaxZoom:false, showCoverageOnHover:false,
+    chunkedLoading:true, removeOutsideVisibleBounds:true,
+    animate:!matchMedia("(prefers-reduced-motion:reduce)").matches,
+    iconCreateFunction: cluster => {
+      const kids = cluster.getAllChildMarkers();
+      let sum = 0, n = 0, wt = 0;
+      kids.forEach(k => { const o = k.options;
+        if (o.mn != null) { sum += o.mn * (o.wt || 1); n += (o.wt || 1); }
+        wt += (o.wt || 1); });
+      const mean = n ? sum / n : null;
+      const d = Math.round(opts.base + Math.min(opts.span, Math.log10(wt + 1) * opts.k));
+      return L.divIcon({className:"", iconSize:[d, d],
+        html:`<div class="poi-cluster" style="width:${d}px;height:${d}px;opacity:.72;
+          background:${cOf(mean)};border:1.3px solid rgba(255,255,255,.45)"></div>`});
+    }});
+  g.on("clustermouseover", e => {
+    const kids = e.layer.getAllChildMarkers();
+    let sum = 0, n = 0, wt = 0;
+    kids.forEach(k => { const o = k.options;
+      if (o.mn != null) { sum += o.mn * (o.wt || 1); n += (o.wt || 1); }
+      wt += (o.wt || 1); });
+    e.layer.bindTooltip(`<b>${e.layer.getChildCount().toLocaleString()} ${opts.noun}</b>
+      <em>${opts.unit(wt)} \u00b7 mean character ${f3(n ? sum / n : null)}</em>`,
+      {className:"tt", direction:"top"}).openTooltip();
+  });
+  return g;
+}
+const stayLayer = valueCluster({noun:"stays", base:16, span:22, k:13,
+  unit:v => hrs(v / 60) + " in total"});
+const zoneLayer = valueCluster({noun:"stay zones", base:18, span:24, k:12,
+  unit:v => hrs(v) + " in total"});
 let routeShapes = new Map(), drawn = [];
 
 function buildRoutes(){
@@ -585,8 +644,11 @@ function applyFilter(){
 function buildStays(){
   stayLayer.clearLayers();
   active().forEach(s => s.data.stays.forEach(q => {
-    L.circleMarker([q.lat, q.lon], {pane:"stays", radius:3 + Math.min(9, Math.log10(q.dur + 1) * 4.2),
-      color:"#FFFFFF", weight:.9, opacity:.85, fillColor:cOf(q.mn), fillOpacity:.85})
+    const d = Math.round(7 + Math.min(11, Math.log10(q.dur + 1) * 5));
+    L.marker([q.lat, q.lon], {pane:"stays", mn:q.mn, wt:q.dur,
+      icon:L.divIcon({className:"", iconSize:[d, d],
+        html:`<div class="poi-leaf" style="width:${d}px;height:${d}px;opacity:.85;
+          background:${cOf(q.mn)};border:1px solid rgba(255,255,255,.6)"></div>`})})
      .bindTooltip(`<b>Stay \u00b7 ${q.dur >= 60 ? (q.dur/60).toFixed(1) + " h" : q.dur + " min"}</b>
        <table><tr><th>collection</th><td>${s.label}</td></tr>
        <tr><th>local character</th><td>${f3(q.mn)} ${kind(q.mn)}</td></tr>
@@ -604,7 +666,8 @@ function buildZones(){
   active().forEach(s => s.data.zones.forEach(z => {
     if (!z.hours) return;
     const r = 5 + Math.min(12, Math.sqrt(z.hours) * 1.1);
-    L.marker([z.lat, z.lon], {pane:"zones", icon:L.divIcon({className:"", iconSize:[r*2, r*2],
+    L.marker([z.lat, z.lon], {pane:"zones", mn:z.mn, wt:z.hours,
+      icon:L.divIcon({className:"", iconSize:[r*2, r*2],
       html:`<div style="width:${r*2}px;height:${r*2}px;background:${cOf(z.mn)};opacity:.9;
         border:1.4px solid ${ZTYPE[z.type]};transform:rotate(45deg)"></div>`})})
      .bindTooltip(`<b>Stay zone ${z.zone}</b>
@@ -981,12 +1044,12 @@ const LAYERS = [
   {l:"Travelled corridors", layer:routeLayer, on:true},
   {l:"Street imagery", layer:imgLayer, on:false},
   {sep:true},
-  {l:"Stay locations", layer:stayLayer, on:true},
-  {l:"Stay zones (hours)", layer:zoneLayer, on:true},
+  {l:"Stay locations", layer:stayLayer, on:false},
+  {l:"Stay zones (hours)", layer:zoneLayer, on:false},
   {l:"Trip origins &amp; destinations", layer:odLayer, on:false},
   {sep:true},
-  {l:"POIs \u2014 tourist-facing", key:"tourist", on:true},
-  {l:"POIs \u2014 resident-facing", key:"resident", on:true},
+  {l:"POIs \u2014 tourist-facing", key:"tourist", on:false},
+  {l:"POIs \u2014 resident-facing", key:"resident", on:false},
   {l:"POIs \u2014 shared", key:"shared", on:false},
 ];
 function initChrome(){
@@ -1035,7 +1098,20 @@ function initChrome(){
       document.querySelectorAll("#catsort button").forEach(o => o.setAttribute("aria-pressed", o === btn));
       catKey = btn.dataset.k; renderCats();
     }));
-  document.addEventListener("keydown", e => { if (e.key === "Escape" && selected != null) clearSel(); });
+  const app = document.getElementById("app"), cbtn = document.getElementById("collapse");
+  const setPanel = open => {
+    app.classList.toggle("collapsed", !open);
+    cbtn.textContent = open ? "‹" : "›";
+    cbtn.setAttribute("aria-expanded", String(open));
+    cbtn.setAttribute("aria-label", open ? "Hide the panel" : "Show the panel");
+    setTimeout(() => MAP.invalidateSize(), 240);
+  };
+  cbtn.addEventListener("click", () => setPanel(app.classList.contains("collapsed")));
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && selected != null) clearSel();
+    if (e.key === "\\" && !/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName))
+      setPanel(app.classList.contains("collapsed"));
+  });
 
   // static legends and POI tabs
   document.getElementById("ramp").innerHTML = COL.map(c => `<i style="background:${c}"></i>`).join("");
