@@ -148,7 +148,7 @@ h2{font-size:11.5px;font-weight:600;color:var(--muted);margin:0 0 10px}
 .lkey o{display:block;width:10px;height:10px;border-radius:50%;background:var(--muted);
   flex:0 0 auto;margin:0 3px}
 .lkey u{text-decoration:none;display:block;width:11px;height:11px;background:var(--muted);
-  flex:0 0 auto;margin:0 3px;transform:rotate(45deg)}
+  flex:0 0 auto;margin:0 3px;border-radius:50%}
 
 .poi-leaf{border-radius:50%}
 .poi-cluster{border-radius:50%}
@@ -676,7 +676,7 @@ function buildZones(){
     L.marker([z.lat, z.lon], {pane:"zones", mn:z.mn, wt:z.hours,
       icon:L.divIcon({className:"", iconSize:[r*2, r*2],
       html:`<div style="width:${r*2}px;height:${r*2}px;background:${cOf(z.mn)};opacity:.9;
-        border:1.4px solid ${ZTYPE[z.type]};transform:rotate(45deg)"></div>`})})
+        border:1.4px solid ${ZTYPE[z.type]};border-radius:50%"></div>`})})
      .bindTooltip(`<b>Stay zone ${z.zone}</b>
        <table><tr><th>collection</th><td>${s.label}</td></tr>
        <tr><th>local character</th><td>${f3(z.mn)} ${kind(z.mn)}</td></tr>
